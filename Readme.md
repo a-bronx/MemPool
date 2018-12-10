@@ -34,6 +34,8 @@ public:
     void free(ElemT* elem) noexcept;
 
     // diagnostics (non-concurrent)
+    static size_t chunk_size() noexcept;
+    size_t chunk_count() const noexcept;
     size_t capacity() const noexcept;
     size_t allocated() const noexcept;
 }

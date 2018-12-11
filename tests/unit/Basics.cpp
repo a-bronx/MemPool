@@ -99,6 +99,8 @@ TEST(Mempool, SupportsDefaultConstructibleElements)
     ASSERT_NE(elem, nullptr);
     ASSERT_EQ(elem->I, 10);
     ASSERT_EQ(elem->S, "Default");
+    pool.free(elem);
+    ASSERT_EQ(pool.allocated(), 0);
 }
 
 TEST(Mempool, SupportsCustomConstructibleElements)
@@ -110,6 +112,8 @@ TEST(Mempool, SupportsCustomConstructibleElements)
     ASSERT_NE(elem, nullptr);
     ASSERT_EQ(elem->I, 123);
     ASSERT_EQ(elem->S, "Custom");
+    pool.free(elem);
+    ASSERT_EQ(pool.allocated(), 0);
 }
 
 TEST(Mempool, HandlesThrowngConstructors)

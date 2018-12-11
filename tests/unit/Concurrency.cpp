@@ -32,9 +32,9 @@ TEST(Mempool, AllocatesConcurrently)
             {
                 v.clear();
                 for(size_t i = 0; i < qty; ++i) {
-                    auto el = pool.alloc();
+                    auto el = pool.alloc(i);
                     ASSERT_NE(el, nullptr);
-                    //ASSERT_EQ(el->I, i);
+                    ASSERT_EQ(*el, i);
                     v.push_back(el);
                 }
 

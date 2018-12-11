@@ -4,13 +4,15 @@
 #include <vector>
 #include "Mempool.h"
 #include "gtest/gtest.h"
+#include "Elements.h"
 
 TEST(Mempool, AllocatesConcurrently)
 {
     using namespace memory;
     using namespace std;
 
-    auto pool = MemoryPool<int, 1024>{};
+    using Element = size_t;
+    auto pool = MemoryPool<Element>{};
 
     auto concurrency = 16;
 
@@ -20,11 +22,11 @@ TEST(Mempool, AllocatesConcurrently)
     {
         threads.emplace_back([&]
         {
-            auto qty = 1'000;
-            vector<int*> v;
+            auto qty = 100;
+            vector<Element*> v;
             v.reserve(qty);
 
-            auto iterations = 1'000;
+            auto iterations = 50;
 
             while (iterations --> 0)
             {
@@ -32,11 +34,13 @@ TEST(Mempool, AllocatesConcurrently)
                 for(size_t i = 0; i < qty; ++i) {
                     auto el = pool.alloc();
                     ASSERT_NE(el, nullptr);
+                    //ASSERT_EQ(el->I, i);
                     v.push_back(el);
                 }
 
-                for(size_t i = 0; i < qty; ++i)
+                for(size_t i = 0; i < qty; ++i) {
                     pool.free(v[i]);
+                }
             }
 
         });

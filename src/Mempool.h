@@ -73,15 +73,14 @@ namespace memory {
             auto elem = allocate();
             if constexpr(std::is_nothrow_constructible_v<ElemT, Args...>)
             {
-                ::new(elem) ElemT(std::forward<Args>(args)...);
+                return ::new(elem) ElemT(std::forward<Args>(args)...);
             }
             else try {
-                ::new(elem) ElemT(std::forward<Args>(args)...);
+                return ::new(elem) ElemT(std::forward<Args>(args)...);
             } catch(...) {
                 free(elem);
                 throw;
             }
-            return elem;
         }
 
         //---------------------------------------------------------------------
@@ -143,7 +142,7 @@ namespace memory {
         Allocator allocator;
         ElemT* arena;                       // could use std::array or std::vector, but they require ElemT be default-constructible
                                             
-        std::array<index_type, ChunkSize> freeList;
+        std::array<std::atomic<index_type>, ChunkSize> freeList;
         std::unique_ptr<MemoryPool> next;
         std::atomic<index_type> freed,      // points to the first free block. Increment to stake a next block aquisition
                                 taken;      // points to the first taken block. Increment to stake a next block return
@@ -160,7 +159,7 @@ namespace memory {
         [[nodiscard]] ElemT* allocate()
         {
             // do we have free space in this chunk? If not, pass the request to a next chunk
-            if (count <= 0)
+            if (count.load() <= 0)
                 return allocate_next();    // eligible for TCO
 
             ElemT* elem = nullptr;
@@ -170,15 +169,14 @@ namespace memory {
             if (prevCount > 0)
             {
                 // we are good, stake a next spot to take from a free list
-                auto pos = advance(taken);
+                volatile auto pos = advance(taken);     // volatile just to prevent optimizing the variable out
 
                 // another thread may not have finished freeing yet, so spin till the index is returned to the free list
-                volatile index_type index = freeList[pos];
-                while (index == TAKEN) index = freeList[pos];
+                index_type index { freeList[pos] };
+                while(!freeList.at(pos).compare_exchange_weak(index, TAKEN, std::memory_order_relaxed)){ []{}; };
 
                 // take the spot
                 elem = &arena[index];
-                index = TAKEN;
             }
             else {
                 // no free space left, pass the request to a next chunk then rollback the claimed capacity
@@ -200,10 +198,14 @@ namespace memory {
             // TODO: check for double-freeing?
 
             // stake a next spot to return to a free list
-            auto pos = advance(freed);
+            volatile auto pos = advance(freed);
 
-            // return the arena block index into the free list 
-            freeList[pos] = static_cast<index_type>(std::distance(arena, elem));
+            // another thread may not have finished taking yet, so spin till the index is taken from the free list
+            // and return the block index into the free list 
+            index_type index = static_cast<index_type>(std::distance(arena, elem));
+            index_type expected_taken = TAKEN;
+            while (freeList.at(pos).compare_exchange_weak(expected_taken, index, std::memory_order_relaxed)){ []{}; }
+
             ++count;
         }
 
@@ -231,7 +233,7 @@ namespace memory {
             // stake a next spot in the free list
             auto oldPos = pos++;
 
-            // wrap the position if needed, taking care of other threads possibly advancing the position too
+            // wrap the new position if needed, taking care of other threads possibly advancing the position too
             unsigned short unwrapped = pos;
             unsigned short wrapped = unwrapped % ChunkSize;
             while (!pos.compare_exchange_weak(unwrapped, wrapped, std::memory_order_relaxed))

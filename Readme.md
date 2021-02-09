@@ -1,3 +1,5 @@
+DISCLAIMER: This code is a playground, it was not thorougly tested and most probably contains some nasty errors. DO NOT USE IT IN PRODUCTION!
+
 **Table of Contents**
 <!-- TOC -->
 

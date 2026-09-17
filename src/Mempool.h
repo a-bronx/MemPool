@@ -56,6 +56,8 @@ namespace memory {
 
         ~MemoryPool()
         {
+            // WARNING: This destructor is only safe if every object was already freed.
+            // If you keep live elements, you must destroy them manually before destruction.
             std::allocator_traits<Allocator>::deallocate(allocator, arena, arena_size);
             assert(count == ChunkSize);
         }

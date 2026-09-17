@@ -30,7 +30,7 @@ namespace memory {
         {}
 
         explicit MemoryPool(Allocator& alloc)
-            : allocator(allocator)
+            : allocator(alloc)
             , arena(reinterpret_cast<ElemT*>(std::allocator_traits<Allocator>::allocate(alloc, arena_size)))
             , freed(0)
             , taken(0)
@@ -46,7 +46,7 @@ namespace memory {
             : MemoryPool(allocator)
         {
             if (initialCapacity > ChunkSize)
-                next = std::make_unique<MemoryPool>(initialCapacity - ChunkSize);
+                next = std::make_unique<MemoryPool>(initialCapacity - ChunkSize, allocator);
         }
 
         MemoryPool(const MemoryPool&) = delete;
@@ -136,7 +136,10 @@ namespace memory {
         
         static_assert(ChunkSize > 1             , "Chunk size is too small");
         static_assert(ChunkSize < max_index     , "Chunk size is too big");
-        static_assert(std::is_same_v<ElemT, Allocator::value_type>, "Incompatible allocator type");
+        static_assert(std::is_same_v<
+            typename std::allocator_traits<Allocator>::value_type,
+            ElemT
+        >, "Incompatible allocator type");
         static_assert(std::is_nothrow_destructible_v<ElemT>, "Element destructor must be noexcept");
 
         Allocator allocator;
@@ -148,8 +151,8 @@ namespace memory {
                                 taken;      // points to the first taken block. Increment to stake a next block return
         std::atomic<int> count;             // provides a lock-free tracking of a current free list capacity
 
-        bool contains(ElemT* elem) const noexcept { return elem >= arena && elem < arena + ChunkSize; }
-        bool getIndex(ElemT* elem) const noexcept { return std::distance(arena, elem); }
+        auto contains(ElemT* elem) const noexcept { return elem >= arena && elem < arena + ChunkSize; }
+        auto getIndex(ElemT* elem) const noexcept { return std::distance(arena, elem); }
 
         //---------------------------------------------------------------------
         // Gets an uninitialized block of memory from the pool.
@@ -220,7 +223,7 @@ namespace memory {
                                                 
             if (!next) {
                 std::lock_guard<std::mutex> _(expansion);
-                if (!next) next = std::make_unique<MemoryPool>();
+                if (!next) next = std::make_unique<MemoryPool>(allocator);
             }
             return next->allocate();    // eligible for TCO
         }
